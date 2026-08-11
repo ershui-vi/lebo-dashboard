@@ -1,0 +1,12 @@
+# 临时文件
+*.tmp
+*.bak
+__pycache__/
+*.pyc
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 备份文件
+*.xlsx
