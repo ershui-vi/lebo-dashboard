@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>乐博经营数据看板</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="data.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0f1419;
+            --card: #1a2332;
+            --card-hover: #1f2937;
+            --border: #2d3748;
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+            --accent: #3b82f6;
+            --green: #10b981;
+            --red: #ef4444;
+            --yellow: #f59e0b;
+            --purple: #8b5cf6;
+        }
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .header .meta {
+            text-align: right;
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+        .header .meta .date {
+            font-size: 16px;
+            color: var(--text);
+            font-weight: 600;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            transition: background 0.2s;
+        }
+        .card:hover { background: var(--card-hover); }
+        .card .label {
+            font-size: 13px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+        .card .value {
+            font-size: 28px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .card .unit {
+            font-size: 14px;
+            color: var(--text-dim);
+            font-weight: 400;
+        }
+        .card .sub {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+        .card.accent-blue .value { color: var(--accent); }
+        .card.accent-green .value { color: var(--green); }
+        .card.accent-red .value { color: var(--red); }
+        .card.accent-yellow .value { color: var(--yellow); }
+        .card.accent-purple .value { color: var(--purple); }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            padding-left: 12px;
+            border-left: 3px solid var(--accent);
+        }
+        .charts-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .chart-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .chart-card h3 {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+        }
+        canvas { max-height: 220px; }
+
+        .detail-table {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .detail-table h3 {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        th {
+            color: var(--text-dim);
+            font-weight: 600;
+        }
+        td.value-cell {
+            text-align: right;
+            font-weight: 600;
+            font-family: 'Consolas', monospace;
+        }
+        .footer {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 12px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: var(--text-dim);
+            font-size: 18px;
+        }
+
+        @media (max-width: 768px) {
+            .charts-row { grid-template-columns: 1fr; }
+            .header { flex-direction: column; gap: 8px; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="loading">加载中...</div>
+    </div>
+
+    <script>
+        // ===== 数据格式化辅助函数 =====
+        function fmtNum(v, decimals = 0) {
+            if (v === null || v === undefined || v === '') return '--';
+            const n = Number(v);
+            if (isNaN(n)) return String(v);
+            return n.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+        }
+        function fmtWan(v) {
+            if (v === null || v === undefined || v === '') return '--';
+            const n = Number(v);
+            if (isNaN(n)) return String(v);
+            return (n / 10000).toFixed(1);
+        }
+        function fmtPct(v) {
+            if (v === null || v === undefined || v === '') return '--';
+            return Number(v).toFixed(2) + '%';
+        }
+
+        // ===== 读取数据 =====
+        // data.js 已通过 <script> 标签加载，数据在 window.__DASHBOARD_DATA__
+        function initData() {
+            const data = window.__DASHBOARD_DATA__;
+            if (!data) {
+                document.getElementById('app').innerHTML = '<div class="loading">数据加载失败: data.js 未找到。</div>';
+                return;
+            }
+            document.getElementById('app').innerHTML = renderDashboard(data);
+            // 延迟渲染图表，确保DOM已插入
+            setTimeout(() => renderCharts(data), 100);
+        }
+        // DOM加载后执行
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initData);
+        } else {
+            initData();
+        }
+
+        function renderDashboard(data) {
+            const d = data.latest;
+            const hist = data.history || [];
+
+            // 趋势数据
+            const dates = hist.map(h => h.date.substring(5)); // MM-DD
+            const newStudents = hist.map(h => h.data['新招生']);
+            const netPre = hist.map(h => h.data['净预收']);
+            const courseCons = hist.map(h => h.data['税后课耗']);
+            const activeRate = hist.map(h => h.data['活跃率']);
+
+            // 存储到全局供图表使用
+            window._chartData = { dates, newStudents, netPre, courseCons, activeRate };
+
+            return `
+            <div class="header">
+                <div>
+                    <h1>乐博经营数据看板</h1>
+                    <div class="meta" style="margin-top:4px;">盛通教育 · 直营业务</div>
+                </div>
+                <div class="meta">
+                    <div class="date">${data.latest_date}</div>
+                    <div>更新时间: ${data.updated_at}</div>
+                </div>
+            </div>
+
+            <!-- 核心指标卡片 -->
+            <div class="grid">
+                <div class="card accent-blue">
+                    <div class="label">新招生</div>
+                    <div class="value">${fmtNum(d['新招生'])}<span class="unit"> 人</span></div>
+                    <div class="sub">前端 ${fmtNum(d['前端新招生'])} · 后端 ${fmtNum(d['后端新招生'])}</div>
+                </div>
+                <div class="card accent-green">
+                    <div class="label">净预收</div>
+                    <div class="value">${fmtWan(d['净预收'])}<span class="unit"> 万元</span></div>
+                    <div class="sub">新招 ${fmtWan(d['新招生预收'])}万 · 复购 ${fmtWan(d['复购净预收'])}万</div>
+                </div>
+                <div class="card accent-purple">
+                    <div class="label">税后课耗</div>
+                    <div class="value">${fmtWan(d['税后课耗'])}<span class="unit"> 万元</span></div>
+                    <div class="sub">常规课 ${fmtWan(d['常规课课耗'])}万 · 单价 ${fmtNum(d['课耗单价'])}元</div>
+                </div>
+                <div class="card accent-yellow">
+                    <div class="label">活跃率</div>
+                    <div class="value">${fmtPct(d['活跃率'])}</div>
+                    <div class="sub">活跃 ${fmtNum(d['活跃学员'])} · 在籍 ${fmtNum(d['在籍学员'])}</div>
+                </div>
+                <div class="card accent-red">
+                    <div class="label">退费金额</div>
+                    <div class="value">${fmtWan(d['退费金额'])}<span class="unit"> 万元</span></div>
+                    <div class="sub">总预收 ${fmtWan(d['总预收'])}万</div>
+                </div>
+            </div>
+
+            <!-- 趋势图表 -->
+            <div class="section-title">近7天趋势</div>
+            <div class="charts-row">
+                <div class="chart-card">
+                    <h3>新招生趋势</h3>
+                    <canvas id="chart-new-students"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>净预收趋势 (万元)</h3>
+                    <canvas id="chart-net-pre"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>税后课耗趋势 (万元)</h3>
+                    <canvas id="chart-course-cons"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>学员活跃率趋势</h3>
+                    <canvas id="chart-active-rate"></canvas>
+                </div>
+            </div>
+
+            <!-- 详细指标表 -->
+            <div class="detail-table">
+                <h3>全部指标明细</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>指标名称</th>
+                            <th>数据来源</th>
+                            <th>当前值</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${renderRows(d)}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="footer">
+                乐博经营数据看板 · 数据来源: 一校教培系统 (manage.shengtongedu.cn) · 每日自动更新
+            </div>
+            `;
+        }
+
+        function renderRows(d) {
+            const pathMap = {
+                '新招生': '线条新招报表',
+                '前端新招生': '线条新招报表',
+                '后端新招生': '线条新招报表',
+                '总预收': '预收/退费报表',
+                '退费金额': '预收/退费报表',
+                '净预收': '预收/退费报表',
+                '新招生预收': '预收分类报表',
+                '复购净预收': '预收分类报表',
+                '税后课耗': '课消单价报表',
+                '常规课课耗': '课消单价报表',
+                '课耗单价': '课消单价报表',
+                '总课次': '课消单价报表',
+                '人均课次': '人均课消次数',
+                '在籍学员': '学员留存率',
+                '活跃学员': '学员活跃率',
+                '活跃率': '学员活跃率',
+                '不活跃学员': '计算值',
+                '不活跃率': '计算值',
+                '新招生留存率': '学员留存率',
+                '老生留存率': '学员留存率',
+                '在籍学员留存率': '学员留存率',
+                '在籍学员账户余额': '学员管理',
+            };
+            const order = ['新招生','前端新招生','后端新招生','总预收','退费金额','净预收','新招生预收','复购净预收','税后课耗','常规课课耗','课耗单价','总课次','人均课次','在籍学员','活跃学员','活跃率','不活跃学员','不活跃率','新招生留存率','老生留存率','在籍学员留存率','在籍学员账户余额'];
+            let html = '';
+            for (const name of order) {
+                if (d[name] !== undefined) {
+                    let val = d[name];
+                    let display;
+                    if (val === null || val === undefined || val === '') {
+                        display = '--';
+                    } else if (['总预收','退费金额','净预收','新招生预收','复购净预收','税后课耗','常规课课耗'].includes(name)) {
+                        display = fmtWan(val) + ' 万';
+                    } else if (['活跃率','不活跃率','新招生留存率','老生留存率','在籍学员留存率'].includes(name)) {
+                        display = fmtPct(val);
+                    } else if (name === '课耗单价') {
+                        display = fmtNum(val, 2) + ' 元';
+                    } else {
+                        display = fmtNum(val);
+                    }
+                    html += `<tr><td>${name}</td><td style="color:var(--text-dim)">${pathMap[name] || '--'}</td><td class="value-cell">${display}</td></tr>`;
+                }
+            }
+            return html;
+        }
+
+        // ===== 图表渲染 =====
+        function renderCharts(data) {
+            const cd = window._chartData;
+            if (!cd) return;
+
+            const commonOpts = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#94a3b8' }, grid: { color: '#2d3748' } },
+                    y: { ticks: { color: '#94a3b8' }, grid: { color: '#2d3748' } }
+                }
+            };
+
+            // 新招生
+            makeLineChart('chart-new-students', cd.dates, cd.newStudents, '#3b82f6', commonOpts);
+            // 净预收
+            makeLineChart('chart-net-pre', cd.dates, cd.netPre.map(v => v ? Number(v)/10000 : 0), '#10b981', commonOpts);
+            // 税后课耗
+            makeLineChart('chart-course-cons', cd.dates, cd.courseCons.map(v => v ? Number(v)/10000 : 0), '#8b5cf6', commonOpts);
+            // 活跃率
+            makeLineChart('chart-active-rate', cd.dates, cd.activeRate, '#f59e0b', commonOpts);
+        }
+
+        function makeLineChart(id, labels, dataValues, color, opts) {
+            const ctx = document.getElementById(id);
+            if (!ctx) return;
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: dataValues,
+                        borderColor: color,
+                        backgroundColor: color + '20',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 4,
+                        pointBackgroundColor: color,
+                        borderWidth: 2
+                    }]
+                },
+                options: opts
+            });
+        }
+    </script>
+</body>
+</html>
