@@ -1,408 +1,627 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>乐博经营数据看板</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="data.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root {
-            --bg: #0f1419;
-            --card: #1a2332;
-            --card-hover: #1f2937;
-            --border: #2d3748;
-            --text: #e2e8f0;
-            --text-dim: #94a3b8;
-            --accent: #3b82f6;
-            --green: #10b981;
-            --red: #ef4444;
-            --yellow: #f59e0b;
-            --purple: #8b5cf6;
-        }
-        body {
-            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border);
-        }
-        .header h1 {
-            font-size: 24px;
-            font-weight: 700;
-        }
-        .header .meta {
-            text-align: right;
-            font-size: 13px;
-            color: var(--text-dim);
-        }
-        .header .meta .date {
-            font-size: 16px;
-            color: var(--text);
-            font-weight: 600;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-            transition: background 0.2s;
-        }
-        .card:hover { background: var(--card-hover); }
-        .card .label {
-            font-size: 13px;
-            color: var(--text-dim);
-            margin-bottom: 8px;
-        }
-        .card .value {
-            font-size: 28px;
-            font-weight: 700;
-            line-height: 1.2;
-        }
-        .card .unit {
-            font-size: 14px;
-            color: var(--text-dim);
-            font-weight: 400;
-        }
-        .card .sub {
-            font-size: 12px;
-            color: var(--text-dim);
-            margin-top: 4px;
-        }
-        .card.accent-blue .value { color: var(--accent); }
-        .card.accent-green .value { color: var(--green); }
-        .card.accent-red .value { color: var(--red); }
-        .card.accent-yellow .value { color: var(--yellow); }
-        .card.accent-purple .value { color: var(--purple); }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>乐博经营数据查询看板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="city_data.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Segoe UI','Microsoft YaHei',sans-serif; background:#f0f2f5; color:#333; }
+.header { background:linear-gradient(135deg,#1a237e,#283593); color:#fff; padding:18px 28px; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+.header h1 { font-size:22px; font-weight:600; }
+.header .subtitle { font-size:12px; opacity:.8; margin-top:3px; }
 
-        .section-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 12px;
-            padding-left: 12px;
-            border-left: 3px solid var(--accent);
-        }
-        .charts-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-        .chart-card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-        }
-        .chart-card h3 {
-            font-size: 14px;
-            color: var(--text-dim);
-            margin-bottom: 16px;
-        }
-        canvas { max-height: 220px; }
+/* 筛选区 */
+.filter-bar { background:#fff; padding:14px 28px; border-bottom:1px solid #e0e0e0; display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; }
+.filter-group { display:flex; flex-direction:column; gap:4px; }
+.filter-group label { font-size:12px; color:#666; font-weight:500; }
+.filter-group select { padding:6px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:13px; background:#fff; min-width:90px; cursor:pointer; transition:border-color .2s; }
+.filter-group select:hover { border-color:#5c6bc0; }
+.filter-group select:focus { border-color:#1a237e; outline:none; }
 
-        .detail-table {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
-        }
-        .detail-table h3 {
-            font-size: 14px;
-            color: var(--text-dim);
-            margin-bottom: 16px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 10px 12px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-            font-size: 13px;
-        }
-        th {
-            color: var(--text-dim);
-            font-weight: 600;
-        }
-        td.value-cell {
-            text-align: right;
-            font-weight: 600;
-            font-family: 'Consolas', monospace;
-        }
-        .footer {
-            text-align: center;
-            color: var(--text-dim);
-            font-size: 12px;
-            padding-top: 16px;
-            border-top: 1px solid var(--border);
-        }
-        .loading {
-            text-align: center;
-            padding: 60px;
-            color: var(--text-dim);
-            font-size: 18px;
-        }
+.mode-toggle { display:flex; gap:0; border-radius:6px; overflow:hidden; border:1px solid #d0d0d0; }
+.mode-toggle button { padding:6px 16px; border:none; background:#f5f5f5; font-size:13px; cursor:pointer; transition:all .2s; }
+.mode-toggle button.active { background:#1a237e; color:#fff; }
 
-        @media (max-width: 768px) {
-            .charts-row { grid-template-columns: 1fr; }
-            .header { flex-direction: column; gap: 8px; align-items: flex-start; }
-        }
-    </style>
+.btn-query { padding:7px 24px; background:#1a237e; color:#fff; border:none; border-radius:6px; font-size:14px; cursor:pointer; transition:background .2s; }
+.btn-query:hover { background:#283593; }
+
+/* 汇总卡片 */
+.summary-section { padding:18px 28px; display:flex; gap:14px; flex-wrap:wrap; }
+.summary-card { background:#fff; border-radius:10px; padding:16px 20px; min-width:160px; box-shadow:0 1px 4px rgba(0,0,0,.08); flex:1; }
+.summary-card .label { font-size:12px; color:#888; margin-bottom:6px; }
+.summary-card .value { font-size:24px; font-weight:700; color:#1a237e; }
+.summary-card .unit { font-size:13px; color:#999; font-weight:400; margin-left:3px; }
+.summary-card.highlight .value { color:#c62828; }
+
+/* 主内容区 */
+.main-content { padding:0 28px 28px; }
+.section-title { font-size:15px; font-weight:600; color:#333; margin:18px 0 10px; padding-left:10px; border-left:4px solid #1a237e; }
+
+/* 图表区 */
+.chart-container { background:#fff; border-radius:10px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,.08); margin-bottom:16px; }
+.chart-container canvas { max-height:360px; }
+
+/* 表格区 */
+.table-container { background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+thead th { background:#f5f5f5; padding:10px 12px; text-align:right; font-weight:600; color:#555; border-bottom:2px solid #e0e0e0; white-space:nowrap; position:sticky; top:0; }
+thead th:first-child, thead th:nth-child(2) { text-align:left; }
+tbody td { padding:8px 12px; text-align:right; border-bottom:1px solid #f0f0f0; white-space:nowrap; }
+tbody td:first-child, tbody td:nth-child(2) { text-align:left; }
+tbody tr:hover { background:#f9f9ff; }
+tbody tr.total-row { font-weight:700; background:#e8eaf6; color:#1a237e; }
+.positive { color:#c62828; }
+.negative { color:#2e7d32; }
+
+/* 信息提示 */
+.info-bar { padding:8px 28px; font-size:12px; color:#888; display:flex; justify-content:space-between; align-items:center; }
+.info-bar .record-count { background:#e8eaf6; padding:3px 10px; border-radius:12px; color:#1a237e; font-weight:500; }
+
+/* 滚动 */
+.table-scroll { max-height:560px; overflow:auto; }
+
+/* 响应式 */
+@media (max-width:768px) {
+  .filter-bar { flex-direction:column; align-items:stretch; }
+  .summary-card { min-width:140px; }
+}
+</style>
 </head>
 <body>
-    <div id="app">
-        <div class="loading">加载中...</div>
+
+<div class="header">
+  <h1>乐博经营数据查询看板</h1>
+  <div class="subtitle">城市级 · 2021-2026 · 21项指标 · 22个城市</div>
+</div>
+
+<!-- 筛选区 -->
+<div class="filter-bar">
+  <div class="filter-group">
+    <label>查询模式</label>
+    <div class="mode-toggle">
+      <button id="modeSingle" class="active" onclick="switchMode('single')">单月查询</button>
+      <button id="modeRange" onclick="switchMode('range')">期间累计</button>
     </div>
+  </div>
+  
+  <div class="filter-group">
+    <label>年份</label>
+    <select id="yearSelect"></select>
+  </div>
+  
+  <div class="filter-group" id="monthGroup">
+    <label>月份</label>
+    <select id="monthSelect"></select>
+  </div>
+  
+  <div class="filter-group" id="rangeGroup" style="display:none;">
+    <label>起始月</label>
+    <select id="startMonth"></select>
+  </div>
+  
+  <div class="filter-group" id="rangeGroup2" style="display:none;">
+    <label>结束月</label>
+    <select id="endMonth"></select>
+  </div>
+  
+  <div class="filter-group">
+    <label>城市</label>
+    <select id="citySelect"></select>
+  </div>
+  
+  <div class="filter-group">
+    <label>指标</label>
+    <select id="indicatorSelect"></select>
+  </div>
+  
+  <button class="btn-query" onclick="query()">查 询</button>
+</div>
 
-    <script>
-        // ===== 数据格式化辅助函数 =====
-        function fmtNum(v, decimals = 0) {
-            if (v === null || v === undefined || v === '') return '--';
-            const n = Number(v);
-            if (isNaN(n)) return String(v);
-            return n.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-        }
-        function fmtWan(v) {
-            if (v === null || v === undefined || v === '') return '--';
-            const n = Number(v);
-            if (isNaN(n)) return String(v);
-            return (n / 10000).toFixed(1);
-        }
-        function fmtPct(v) {
-            if (v === null || v === undefined || v === '') return '--';
-            return Number(v).toFixed(2) + '%';
-        }
+<!-- 信息栏 -->
+<div class="info-bar">
+  <span id="queryDesc">请选择条件后点击查询</span>
+  <span class="record-count" id="recordCount">0 条</span>
+</div>
 
-        // ===== 读取数据 =====
-        // data.js 已通过 <script> 标签加载，数据在 window.__DASHBOARD_DATA__
-        function initData() {
-            const data = window.__DASHBOARD_DATA__;
-            if (!data) {
-                document.getElementById('app').innerHTML = '<div class="loading">数据加载失败: data.js 未找到。</div>';
-                return;
+<!-- 汇总卡片 -->
+<div class="summary-section" id="summarySection"></div>
+
+<!-- 主内容 -->
+<div class="main-content">
+  <div id="chartArea" style="display:none;">
+    <div class="section-title" id="chartTitle">趋势图</div>
+    <div class="chart-container">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+  
+  <div class="section-title">数据明细</div>
+  <div class="table-container">
+    <div class="table-scroll">
+      <table id="dataTable">
+        <thead><tr><th>城市</th><th>指标</th></tr></thead>
+        <tbody><tr><td colspan="2" style="text-align:center;color:#999;padding:30px;">点击查询按钮加载数据</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = window.__CITY_DATA__;
+const MONTHS = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+let currentMode = 'single';
+let trendChart = null;
+
+// ===== 初始化下拉框 =====
+function initSelects() {
+  // 年份
+  const yearSel = document.getElementById('yearSelect');
+  DATA.years.forEach(y => {
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y + '年';
+    yearSel.appendChild(opt);
+  });
+  yearSel.value = DATA.years[DATA.years.length - 1]; // 默认最新年份
+
+  // 月份
+  const monthSel = document.getElementById('monthSelect');
+  const startSel = document.getElementById('startMonth');
+  const endSel = document.getElementById('endMonth');
+  MONTHS.forEach((m, i) => {
+    monthSel.appendChild(new Option(m, m));
+    startSel.appendChild(new Option(m, m));
+    endSel.appendChild(new Option(m, m));
+  });
+  monthSel.value = '1月';
+  startSel.value = '1月';
+  endSel.value = '7月'; // 默认到7月(最新数据)
+
+  // 城市
+  const citySel = document.getElementById('citySelect');
+  citySel.appendChild(new Option('全部城市', 'all'));
+  DATA.cities.forEach(c => citySel.appendChild(new Option(c, c)));
+
+  // 指标
+  const indSel = document.getElementById('indicatorSelect');
+  indSel.appendChild(new Option('全部指标', 'all'));
+  DATA.indicators.forEach(i => indSel.appendChild(new Option(i, i)));
+}
+
+// ===== 切换模式 =====
+function switchMode(mode) {
+  currentMode = mode;
+  document.getElementById('modeSingle').classList.toggle('active', mode === 'single');
+  document.getElementById('modeRange').classList.toggle('active', mode === 'range');
+  document.getElementById('monthGroup').style.display = mode === 'single' ? '' : 'none';
+  document.getElementById('rangeGroup').style.display = mode === 'range' ? '' : 'none';
+  document.getElementById('rangeGroup2').style.display = mode === 'range' ? '' : 'none';
+}
+
+// ===== 数值格式化 =====
+function fmt(val, decimals) {
+  if (val === null || val === undefined || val === '' || isNaN(val)) return '—';
+  decimals = decimals || 0;
+  const abs = Math.abs(val);
+  if (abs >= 10000) {
+    return (val / 10000).toFixed(decimals || 1) + '万';
+  }
+  return val.toFixed(decimals);
+}
+
+function fmtRaw(val, decimals) {
+  if (val === null || val === undefined || val === '' || isNaN(val)) return '—';
+  return val.toFixed(decimals || 2);
+}
+
+// ===== 查询 =====
+function query() {
+  const year = parseInt(document.getElementById('yearSelect').value);
+  const city = document.getElementById('citySelect').value;
+  const indicator = document.getElementById('indicatorSelect').value;
+
+  let monthList = [];
+  let desc = '';
+
+  if (currentMode === 'single') {
+    const month = document.getElementById('monthSelect').value;
+    monthList = [month];
+    desc = `${year}年 ${month}`;
+  } else {
+    const startM = document.getElementById('startMonth').value;
+    const endM = document.getElementById('endMonth').value;
+    const si = MONTHS.indexOf(startM);
+    const ei = MONTHS.indexOf(endM);
+    if (si > ei) { alert('起始月不能晚于结束月'); return; }
+    monthList = MONTHS.slice(si, ei + 1);
+    desc = `${year}年 ${startM}-${endM} 累计`;
+  }
+
+  let cityDesc = city === 'all' ? '全部城市' : city;
+  let indDesc = indicator === 'all' ? '全部指标' : indicator;
+  document.getElementById('queryDesc').textContent = `${desc} | ${cityDesc} | ${indDesc}`;
+
+  // 过滤数据
+  let filtered = DATA.records.filter(r => r['年份'] === year);
+  if (city !== 'all') filtered = filtered.filter(r => r['城市'] === city);
+  if (indicator !== 'all') filtered = filtered.filter(r => r['指标'] === indicator);
+
+  // 计算每条记录的累计值
+  let results = filtered.map(r => {
+    let sum = 0;
+    let hasData = false;
+    const monthlyVals = {};
+    monthList.forEach(m => {
+      const v = r[m];
+      monthlyVals[m] = v;
+      if (v !== null && v !== undefined && v !== '' && !isNaN(v)) {
+        sum += parseFloat(v);
+        hasData = true;
+      }
+    });
+    return {
+      城市: r['城市'],
+      指标: r['指标'],
+      年份: year,
+      累计: hasData ? sum : null,
+      月度: monthlyVals
+    };
+  });
+
+  document.getElementById('recordCount').textContent = `${results.length} 条`;
+
+  // 渲染
+  renderSummary(results, indicator, monthList);
+  renderTable(results, monthList, indicator);
+  
+  // 趋势图
+  if (currentMode === 'range') {
+    renderChart(results, monthList, city, indicator);
+  } else {
+    // 单月模式下，如果有多个城市且选了特定指标，也画对比图
+    if (indicator !== 'all' && city === 'all') {
+      renderChart(results, monthList, city, indicator);
+    } else {
+      document.getElementById('chartArea').style.display = 'none';
+    }
+  }
+}
+
+// ===== 渲染汇总卡片 =====
+function renderSummary(results, indicator, monthList) {
+  const section = document.getElementById('summarySection');
+  section.innerHTML = '';
+
+  // 选择要展示的指标（最多5个）
+  let keyIndicators;
+  if (indicator !== 'all') {
+    keyIndicators = [indicator];
+  } else {
+    // 默认展示5个核心指标
+    const preferred = ['新招生', '预收', '复购净预收', '课耗', '净利润'];
+    keyIndicators = preferred.filter(i => results.some(r => r['指标'] === i));
+    if (keyIndicators.length < 5) {
+      // 补充其他指标
+      const others = [...new Set(results.map(r => r['指标']))].filter(i => !keyIndicators.includes(i));
+      keyIndicators = keyIndicators.concat(others.slice(0, 5 - keyIndicators.length));
+    }
+  }
+
+  keyIndicators.forEach(ind => {
+    const indResults = results.filter(r => r['指标'] === ind);
+    const total = indResults.reduce((sum, r) => {
+      if (r['累计'] !== null && !isNaN(r['累计'])) return sum + r['累计'];
+      return sum;
+    }, 0);
+    const hasData = indResults.some(r => r['累计'] !== null);
+
+    const card = document.createElement('div');
+    card.className = 'summary-card' + (ind === '净利润' ? ' highlight' : '');
+    
+    let displayVal = '—';
+    let unit = '';
+    if (hasData) {
+      // 金额类指标用万元
+      const moneyIndicators = ['预收', '净预收', '复购净预收', '新招生预收', '课耗', '净利润', '收入', '人工成本', '变动成本', '固定成本', '房租费用', '教具成本', '教具收入', '测评预收', '比赛预收', '测评课耗', '比赛课耗', '现金流净额'];
+      if (moneyIndicators.includes(ind) && Math.abs(total) >= 10000) {
+        displayVal = (total / 10000).toFixed(1);
+        unit = '万';
+      } else {
+        displayVal = total.toFixed(0);
+      }
+    }
+
+    card.innerHTML = `
+      <div class="label">${ind}${monthList.length > 1 ? ' 累计' : ''}</div>
+      <div class="value">${displayVal}<span class="unit">${unit}</span></div>
+    `;
+    section.appendChild(card);
+  });
+}
+
+// ===== 渲染表格 =====
+function renderTable(results, monthList, indicator) {
+  const table = document.getElementById('dataTable');
+  const thead = table.querySelector('thead');
+  const tbody = table.querySelector('tbody');
+
+  // 表头
+  let headerHTML = '<tr><th>城市</th><th>指标</th>';
+  if (monthList.length > 1) {
+    monthList.forEach(m => headerHTML += `<th>${m}</th>`);
+    headerHTML += '<th>累计</th>';
+  } else {
+    headerHTML += `<th>${monthList[0]}</th>`;
+  }
+  headerHTML += '</tr>';
+  thead.innerHTML = headerHTML;
+
+  // 排序: 按城市分组, 每组内按指标顺序
+  const cityOrder = DATA.cities;
+  const indOrder = DATA.indicators;
+  results.sort((a, b) => {
+    const ci = cityOrder.indexOf(a['城市']) - cityOrder.indexOf(b['城市']);
+    if (ci !== 0) return ci;
+    return indOrder.indexOf(a['指标']) - indOrder.indexOf(b['指标']);
+  });
+
+  // 计算合计行
+  let totals = {};
+  results.forEach(r => {
+    if (r['累计'] !== null && !isNaN(r['累计'])) {
+      if (!totals[r['指标']]) totals[r['指标']] = { sum: 0, monthly: {} };
+      totals[r['指标']].sum += r['累计'];
+      monthList.forEach(m => {
+        const v = r['月度'][m];
+        if (v !== null && v !== undefined && !isNaN(v)) {
+          totals[r['指标']].monthly[m] = (totals[r['指标']].monthly[m] || 0) + parseFloat(v);
+        }
+      });
+    }
+  });
+
+  // 数据行
+  let bodyHTML = '';
+  results.forEach(r => {
+    const isMoney = ['预收','净预收','复购净预收','新招生预收','课耗','净利润','收入','人工成本','变动成本','固定成本','房租费用','教具成本','教具收入','测评预收','比赛预收','测评课耗','比赛课耗','现金流净额'].includes(r['指标']);
+    const dec = isMoney ? 0 : 0;
+    
+    bodyHTML += `<tr>`;
+    bodyHTML += `<td>${r['城市']}</td>`;
+    bodyHTML += `<td>${r['指标']}</td>`;
+    
+    if (monthList.length > 1) {
+      monthList.forEach(m => {
+        const v = r['月度'][m];
+        bodyHTML += `<td>${fmtRaw(v, dec)}</td>`;
+      });
+      // 累计列
+      const cum = r['累计'];
+      let cumClass = '';
+      if (cum !== null && isMoney) {
+        cumClass = cum > 0 ? 'positive' : (cum < 0 ? 'negative' : '');
+      }
+      bodyHTML += `<td class="${cumClass}" style="font-weight:600;">${fmtRaw(cum, dec)}</td>`;
+    } else {
+      const v = r['月度'][monthList[0]];
+      let vClass = '';
+      if (v !== null && isMoney) {
+        vClass = v > 0 ? 'positive' : (v < 0 ? 'negative' : '');
+      }
+      bodyHTML += `<td class="${vClass}" style="font-weight:600;">${fmtRaw(v, dec)}</td>`;
+    }
+    bodyHTML += `</tr>`;
+  });
+
+  // 合计行
+  const showTotal = results.length > 1 && (indicator !== 'all' || city !== 'all');
+  const city = document.getElementById('citySelect').value;
+  if (showTotal && city === 'all') {
+    // 按指标汇总
+    const groupedIndicators = [...new Set(results.map(r => r['指标']))];
+    groupedIndicators.forEach(ind => {
+      const t = totals[ind];
+      if (!t) return;
+      const isMoney = ['预收','净预收','复购净预收','新招生预收','课耗','净利润','收入','人工成本','变动成本','固定成本','房租费用','教具成本','教具收入','测评预收','比赛预收','测评课耗','比赛课耗','现金流净额'].includes(ind);
+      const dec = 0;
+      
+      bodyHTML += `<tr class="total-row">`;
+      bodyHTML += `<td>合计</td>`;
+      bodyHTML += `<td>${ind}</td>`;
+      if (monthList.length > 1) {
+        monthList.forEach(m => {
+          bodyHTML += `<td>${fmtRaw(t.monthly[m], dec)}</td>`;
+        });
+        bodyHTML += `<td>${fmtRaw(t.sum, dec)}</td>`;
+      } else {
+        bodyHTML += `<td>${fmtRaw(t.monthly[monthList[0]], dec)}</td>`;
+      }
+      bodyHTML += `</tr>`;
+    });
+  }
+
+  if (results.length === 0) {
+    bodyHTML = `<tr><td colspan="${monthList.length + 3}" style="text-align:center;color:#999;padding:30px;">没有匹配的数据</td></tr>`;
+  }
+
+  tbody.innerHTML = bodyHTML;
+}
+
+// ===== 渲染趋势图 =====
+function renderChart(results, monthList, city, indicator) {
+  const chartArea = document.getElementById('chartArea');
+  chartArea.style.display = '';
+
+  let title = '';
+  if (currentMode === 'range') {
+    if (indicator !== 'all') {
+      title = `${indicator} - 月度趋势 (${monthList[0]}-${monthList[monthList.length-1]})`;
+    } else {
+      title = `期间趋势 (${monthList[0]}-${monthList[monthList.length-1]})`;
+    }
+  } else {
+    title = `${indicator} - 城市对比`;
+  }
+  document.getElementById('chartTitle').textContent = title;
+
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  
+  if (trendChart) trendChart.destroy();
+
+  // 准备数据
+  let datasets = [];
+  let labels = monthList;
+
+  const colors = ['#1a237e','#c62828','#2e7d32','#f57f17','#6a1b9a','#00838f','#e65100','#455a64','#ad1457','#283593','#bf360c','#00695c','#4e342e','#37474f','#827717','#004d40','#26418f','#b71c1c','#1b5e20','#e65100','#424242'];
+
+  if (indicator !== 'all') {
+    // 单指标: 每个城市一条线
+    if (city === 'all') {
+      const chartCities = [...new Set(results.map(r => r['城市']))];
+      chartCities.forEach((c, idx) => {
+        const cityResult = results.find(r => r['城市'] === c && r['指标'] === indicator);
+        if (cityResult) {
+          const data = monthList.map(m => {
+            const v = cityResult['月度'][m];
+            return (v !== null && v !== undefined && !isNaN(v)) ? parseFloat(v) : null;
+          });
+          datasets.push({
+            label: c,
+            data: data,
+            borderColor: colors[idx % colors.length],
+            backgroundColor: colors[idx % colors.length] + '20',
+            borderWidth: 2,
+            tension: 0.3,
+            fill: false,
+            spanGaps: true
+          });
+        }
+      });
+    } else {
+      // 单城市单指标: 只画一条线
+      const data = monthList.map(m => {
+        const v = results[0] && results[0]['月度'][m];
+        return (v !== null && v !== undefined && !isNaN(v)) ? parseFloat(v) : null;
+      });
+      datasets.push({
+        label: `${city} - ${indicator}`,
+        data: data,
+        borderColor: colors[0],
+        backgroundColor: colors[0] + '20',
+        borderWidth: 2,
+        tension: 0.3,
+        fill: true,
+        spanGaps: true
+      });
+    }
+  } else {
+    // 全指标: 显示各指标的累计值对比 (柱状图)
+    if (city === 'all') {
+      // 各指标的合计趋势
+      const allIndicators = [...new Set(results.map(r => r['指标']))];
+      allIndicators.forEach((ind, idx) => {
+        const indResults = results.filter(r => r['指标'] === ind);
+        const data = monthList.map(m => {
+          let sum = 0;
+          let hasData = false;
+          indResults.forEach(r => {
+            const v = r['月度'][m];
+            if (v !== null && v !== undefined && !isNaN(v)) {
+              sum += parseFloat(v);
+              hasData = true;
             }
-            document.getElementById('app').innerHTML = renderDashboard(data);
-            // 延迟渲染图表，确保DOM已插入
-            setTimeout(() => renderCharts(data), 100);
+          });
+          return hasData ? sum : null;
+        });
+        datasets.push({
+          label: ind,
+          data: data,
+          borderColor: colors[idx % colors.length],
+          backgroundColor: colors[idx % colors.length] + '30',
+          borderWidth: 2,
+          tension: 0.3,
+          fill: false,
+          spanGaps: true
+        });
+      });
+    } else {
+      // 单城市全指标
+      const allIndicators = [...new Set(results.map(r => r['指标']))];
+      allIndicators.forEach((ind, idx) => {
+        const indResult = results.find(r => r['指标'] === ind);
+        if (indResult) {
+          const data = monthList.map(m => {
+            const v = indResult['月度'][m];
+            return (v !== null && v !== undefined && !isNaN(v)) ? parseFloat(v) : null;
+          });
+          datasets.push({
+            label: ind,
+            data: data,
+            borderColor: colors[idx % colors.length],
+            backgroundColor: colors[idx % colors.length] + '20',
+            borderWidth: 2,
+            tension: 0.3,
+            fill: false,
+            spanGaps: true
+          });
         }
-        // DOM加载后执行
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initData);
-        } else {
-            initData();
-        }
+      });
+    }
+  }
 
-        function renderDashboard(data) {
-            const d = data.latest;
-            const hist = data.history || [];
+  // 判断数据量大小，调整图例
+  const showLegend = datasets.length <= 12;
 
-            // 趋势数据
-            const dates = hist.map(h => h.date.substring(5)); // MM-DD
-            const newStudents = hist.map(h => h.data['新招生']);
-            const netPre = hist.map(h => h.data['净预收']);
-            const courseCons = hist.map(h => h.data['税后课耗']);
-            const activeRate = hist.map(h => h.data['活跃率']);
-
-            // 存储到全局供图表使用
-            window._chartData = { dates, newStudents, netPre, courseCons, activeRate };
-
-            return `
-            <div class="header">
-                <div>
-                    <h1>乐博经营数据看板</h1>
-                    <div class="meta" style="margin-top:4px;">盛通教育 · 直营业务</div>
-                </div>
-                <div class="meta">
-                    <div class="date">${data.latest_date}</div>
-                    <div>更新时间: ${data.updated_at}</div>
-                </div>
-            </div>
-
-            <!-- 核心指标卡片 -->
-            <div class="grid">
-                <div class="card accent-blue">
-                    <div class="label">新招生</div>
-                    <div class="value">${fmtNum(d['新招生'])}<span class="unit"> 人</span></div>
-                    <div class="sub">前端 ${fmtNum(d['前端新招生'])} · 后端 ${fmtNum(d['后端新招生'])}</div>
-                </div>
-                <div class="card accent-green">
-                    <div class="label">净预收</div>
-                    <div class="value">${fmtWan(d['净预收'])}<span class="unit"> 万元</span></div>
-                    <div class="sub">新招 ${fmtWan(d['新招生预收'])}万 · 复购 ${fmtWan(d['复购净预收'])}万</div>
-                </div>
-                <div class="card accent-purple">
-                    <div class="label">税后课耗</div>
-                    <div class="value">${fmtWan(d['税后课耗'])}<span class="unit"> 万元</span></div>
-                    <div class="sub">常规课 ${fmtWan(d['常规课课耗'])}万 · 单价 ${fmtNum(d['课耗单价'])}元</div>
-                </div>
-                <div class="card accent-yellow">
-                    <div class="label">活跃率</div>
-                    <div class="value">${fmtPct(d['活跃率'])}</div>
-                    <div class="sub">活跃 ${fmtNum(d['活跃学员'])} · 在籍 ${fmtNum(d['在籍学员'])}</div>
-                </div>
-                <div class="card accent-red">
-                    <div class="label">退费金额</div>
-                    <div class="value">${fmtWan(d['退费金额'])}<span class="unit"> 万元</span></div>
-                    <div class="sub">总预收 ${fmtWan(d['总预收'])}万</div>
-                </div>
-            </div>
-
-            <!-- 趋势图表 -->
-            <div class="section-title">近7天趋势</div>
-            <div class="charts-row">
-                <div class="chart-card">
-                    <h3>新招生趋势</h3>
-                    <canvas id="chart-new-students"></canvas>
-                </div>
-                <div class="chart-card">
-                    <h3>净预收趋势 (万元)</h3>
-                    <canvas id="chart-net-pre"></canvas>
-                </div>
-                <div class="chart-card">
-                    <h3>税后课耗趋势 (万元)</h3>
-                    <canvas id="chart-course-cons"></canvas>
-                </div>
-                <div class="chart-card">
-                    <h3>学员活跃率趋势</h3>
-                    <canvas id="chart-active-rate"></canvas>
-                </div>
-            </div>
-
-            <!-- 详细指标表 -->
-            <div class="detail-table">
-                <h3>全部指标明细</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>指标名称</th>
-                            <th>数据来源</th>
-                            <th>当前值</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${renderRows(d)}
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="footer">
-                乐博经营数据看板 · 数据来源: 一校教培系统 (manage.shengtongedu.cn) · 每日自动更新
-            </div>
-            `;
-        }
-
-        function renderRows(d) {
-            const pathMap = {
-                '新招生': '线条新招报表',
-                '前端新招生': '线条新招报表',
-                '后端新招生': '线条新招报表',
-                '总预收': '预收/退费报表',
-                '退费金额': '预收/退费报表',
-                '净预收': '预收/退费报表',
-                '新招生预收': '预收分类报表',
-                '复购净预收': '预收分类报表',
-                '税后课耗': '课消单价报表',
-                '常规课课耗': '课消单价报表',
-                '课耗单价': '课消单价报表',
-                '总课次': '课消单价报表',
-                '人均课次': '人均课消次数',
-                '在籍学员': '学员留存率',
-                '活跃学员': '学员活跃率',
-                '活跃率': '学员活跃率',
-                '不活跃学员': '计算值',
-                '不活跃率': '计算值',
-                '新招生留存率': '学员留存率',
-                '老生留存率': '学员留存率',
-                '在籍学员留存率': '学员留存率',
-                '在籍学员账户余额': '学员管理',
-            };
-            const order = ['新招生','前端新招生','后端新招生','总预收','退费金额','净预收','新招生预收','复购净预收','税后课耗','常规课课耗','课耗单价','总课次','人均课次','在籍学员','活跃学员','活跃率','不活跃学员','不活跃率','新招生留存率','老生留存率','在籍学员留存率','在籍学员账户余额'];
-            let html = '';
-            for (const name of order) {
-                if (d[name] !== undefined) {
-                    let val = d[name];
-                    let display;
-                    if (val === null || val === undefined || val === '') {
-                        display = '--';
-                    } else if (['总预收','退费金额','净预收','新招生预收','复购净预收','税后课耗','常规课课耗'].includes(name)) {
-                        display = fmtWan(val) + ' 万';
-                    } else if (['活跃率','不活跃率','新招生留存率','老生留存率','在籍学员留存率'].includes(name)) {
-                        display = fmtPct(val);
-                    } else if (name === '课耗单价') {
-                        display = fmtNum(val, 2) + ' 元';
-                    } else {
-                        display = fmtNum(val);
-                    }
-                    html += `<tr><td>${name}</td><td style="color:var(--text-dim)">${pathMap[name] || '--'}</td><td class="value-cell">${display}</td></tr>`;
-                }
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: labels, datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { 
+          display: showLegend,
+          position: 'top',
+          labels: { font: { size: 11 }, boxWidth: 12, padding: 8 }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              let val = ctx.parsed.y;
+              if (val === null) return null;
+              let label = ctx.dataset.label + ': ';
+              if (Math.abs(val) >= 10000) {
+                label += (val / 10000).toFixed(1) + '万';
+              } else {
+                label += val.toFixed(0);
+              }
+              return label;
             }
-            return html;
+          }
         }
-
-        // ===== 图表渲染 =====
-        function renderCharts(data) {
-            const cd = window._chartData;
-            if (!cd) return;
-
-            const commonOpts = {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { ticks: { color: '#94a3b8' }, grid: { color: '#2d3748' } },
-                    y: { ticks: { color: '#94a3b8' }, grid: { color: '#2d3748' } }
-                }
-            };
-
-            // 新招生
-            makeLineChart('chart-new-students', cd.dates, cd.newStudents, '#3b82f6', commonOpts);
-            // 净预收
-            makeLineChart('chart-net-pre', cd.dates, cd.netPre.map(v => v ? Number(v)/10000 : 0), '#10b981', commonOpts);
-            // 税后课耗
-            makeLineChart('chart-course-cons', cd.dates, cd.courseCons.map(v => v ? Number(v)/10000 : 0), '#8b5cf6', commonOpts);
-            // 活跃率
-            makeLineChart('chart-active-rate', cd.dates, cd.activeRate, '#f59e0b', commonOpts);
+      },
+      scales: {
+        y: {
+          ticks: {
+            callback: function(val) {
+              if (Math.abs(val) >= 10000) return (val / 10000).toFixed(0) + '万';
+              return val;
+            }
+          }
         }
+      }
+    }
+  });
+}
 
-        function makeLineChart(id, labels, dataValues, color, opts) {
-            const ctx = document.getElementById(id);
-            if (!ctx) return;
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: dataValues,
-                        borderColor: color,
-                        backgroundColor: color + '20',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 4,
-                        pointBackgroundColor: color,
-                        borderWidth: 2
-                    }]
-                },
-                options: opts
-            });
-        }
-    </script>
+// ===== 初始化 =====
+initSelects();
+// 默认查询
+query();
+</script>
+
 </body>
 </html>
