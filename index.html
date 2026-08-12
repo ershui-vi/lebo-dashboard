@@ -276,16 +276,11 @@ function query() {
   renderSummary(results, indicator, monthList);
   renderTable(results, monthList, indicator);
   
-  // 趋势图
+  // 趋势图：仅期间累计模式显示
   if (currentMode === 'range') {
     renderChart(results, monthList, city, indicator);
   } else {
-    // 单月模式下，如果有多个城市且选了特定指标，也画对比图
-    if (indicator !== 'all' && city === 'all') {
-      renderChart(results, monthList, city, indicator);
-    } else {
-      document.getElementById('chartArea').style.display = 'none';
-    }
+    document.getElementById('chartArea').style.display = 'none';
   }
 }
 
@@ -346,8 +341,89 @@ function renderTable(results, monthList, indicator) {
   const table = document.getElementById('dataTable');
   const thead = table.querySelector('thead');
   const tbody = table.querySelector('tbody');
+  const city = document.getElementById('citySelect').value;
+  const isMoneyList = ['预收','净预收','复购净预收','新招生预收','课耗','净利润','收入','人工成本','变动成本','固定成本','房租费用','教具成本','教具收入','测评预收','比赛预收','测评课耗','比赛课耗','现金流净额'];
 
-  // 表头
+  // ===== 单月模式：特定指标 + 全部城市 → 城市排名表（降序）=====
+  if (currentMode === 'single' && indicator !== 'all' && city === 'all') {
+    let headerHTML = '<tr><th>排名</th><th>城市</th>';
+    headerHTML += `<th>${indicator}</th>`;
+    headerHTML += '</tr>';
+    thead.innerHTML = headerHTML;
+
+    // 过滤有数据的记录并按值降序排列
+    let sorted = results.filter(r => r['累计'] !== null && !isNaN(r['累计']));
+    sorted.sort((a, b) => b['累计'] - a['累计']);
+
+    const isMoney = isMoneyList.includes(indicator);
+    let bodyHTML = '';
+    let total = 0;
+    let hasTotal = false;
+    sorted.forEach((r, idx) => {
+      const val = r['累计'];
+      total += val;
+      hasTotal = true;
+      let valClass = '';
+      if (isMoney) {
+        valClass = val > 0 ? 'positive' : (val < 0 ? 'negative' : '');
+      }
+      bodyHTML += `<tr>`;
+      bodyHTML += `<td style="font-weight:600;color:#999;width:50px;">${idx + 1}</td>`;
+      bodyHTML += `<td>${r['城市']}</td>`;
+      bodyHTML += `<td class="${valClass}" style="font-weight:600;">${fmtRaw(val, isMoney ? 2 : 2)}</td>`;
+      bodyHTML += `</tr>`;
+    });
+
+    // 合计行
+    if (hasTotal && sorted.length > 1) {
+      let valClass = isMoney ? (total > 0 ? 'positive' : (total < 0 ? 'negative' : '')) : '';
+      bodyHTML += `<tr class="total-row">`;
+      bodyHTML += `<td></td>`;
+      bodyHTML += `<td>合计 (${sorted.length}城)</td>`;
+      bodyHTML += `<td class="${valClass}">${fmtRaw(total, isMoney ? 2 : 2)}</td>`;
+      bodyHTML += `</tr>`;
+    }
+
+    if (sorted.length === 0) {
+      bodyHTML = `<tr><td colspan="3" style="text-align:center;color:#999;padding:30px;">没有匹配的数据</td></tr>`;
+    }
+    tbody.innerHTML = bodyHTML;
+    return;
+  }
+
+  // ===== 单月模式：特定城市 + 全部指标 → 该城市指标明细表 =====
+  if (currentMode === 'single' && city !== 'all' && indicator === 'all') {
+    let headerHTML = '<tr><th>指标</th>';
+    headerHTML += `<th>${monthList[0]}</th>`;
+    headerHTML += '</tr>';
+    thead.innerHTML = headerHTML;
+
+    // 按指标预设顺序排列
+    const indOrder = DATA.indicators;
+    let sorted = results.slice().sort((a, b) => indOrder.indexOf(a['指标']) - indOrder.indexOf(b['指标']));
+
+    let bodyHTML = '';
+    sorted.forEach(r => {
+      const val = r['月度'][monthList[0]];
+      const isMoney = isMoneyList.includes(r['指标']);
+      let valClass = '';
+      if (val !== null && val !== undefined && !isNaN(val) && isMoney) {
+        valClass = val > 0 ? 'positive' : (val < 0 ? 'negative' : '');
+      }
+      bodyHTML += `<tr>`;
+      bodyHTML += `<td>${r['指标']}</td>`;
+      bodyHTML += `<td class="${valClass}" style="font-weight:600;">${fmtRaw(val, isMoney ? 2 : 2)}</td>`;
+      bodyHTML += `</tr>`;
+    });
+
+    if (sorted.length === 0) {
+      bodyHTML = `<tr><td colspan="2" style="text-align:center;color:#999;padding:30px;">没有匹配的数据</td></tr>`;
+    }
+    tbody.innerHTML = bodyHTML;
+    return;
+  }
+
+  // ===== 通用表格（期间累计 或 单月全部城市全部指标）=====
   let headerHTML = '<tr><th>城市</th><th>指标</th>';
   if (monthList.length > 1) {
     monthList.forEach(m => headerHTML += `<th>${m}</th>`);
@@ -385,8 +461,8 @@ function renderTable(results, monthList, indicator) {
   // 数据行
   let bodyHTML = '';
   results.forEach(r => {
-    const isMoney = ['预收','净预收','复购净预收','新招生预收','课耗','净利润','收入','人工成本','变动成本','固定成本','房租费用','教具成本','教具收入','测评预收','比赛预收','测评课耗','比赛课耗','现金流净额'].includes(r['指标']);
-    const dec = isMoney ? 0 : 0;
+    const isMoney = isMoneyList.includes(r['指标']);
+    const dec = 0;
     
     bodyHTML += `<tr>`;
     bodyHTML += `<td>${r['城市']}</td>`;
@@ -397,7 +473,6 @@ function renderTable(results, monthList, indicator) {
         const v = r['月度'][m];
         bodyHTML += `<td>${fmtRaw(v, dec)}</td>`;
       });
-      // 累计列
       const cum = r['累计'];
       let cumClass = '';
       if (cum !== null && isMoney) {
@@ -417,14 +492,12 @@ function renderTable(results, monthList, indicator) {
 
   // 合计行
   const showTotal = results.length > 1 && (indicator !== 'all' || city !== 'all');
-  const city = document.getElementById('citySelect').value;
   if (showTotal && city === 'all') {
-    // 按指标汇总
     const groupedIndicators = [...new Set(results.map(r => r['指标']))];
     groupedIndicators.forEach(ind => {
       const t = totals[ind];
       if (!t) return;
-      const isMoney = ['预收','净预收','复购净预收','新招生预收','课耗','净利润','收入','人工成本','变动成本','固定成本','房租费用','教具成本','教具收入','测评预收','比赛预收','测评课耗','比赛课耗','现金流净额'].includes(ind);
+      const isMoney = isMoneyList.includes(ind);
       const dec = 0;
       
       bodyHTML += `<tr class="total-row">`;
