@@ -38,7 +38,7 @@ body { font-family:'Segoe UI','Microsoft YaHei',sans-serif; background:#f0f2f5; 
 
 /* 图表区 */
 .chart-container { background:#fff; border-radius:10px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,.08); margin-bottom:16px; }
-.chart-container canvas { max-height:360px; }
+.chart-container canvas { max-height:520px; }
 
 /* 表格区 */
 .table-container { background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.08); }
@@ -114,13 +114,6 @@ tbody tr.total-row { font-weight:700; background:#e8eaf6; color:#1a237e; }
 
 <!-- 主内容 -->
 <div class="main-content">
-  <div id="chartArea" style="display:none;">
-    <div class="section-title" id="chartTitle">趋势图</div>
-    <div class="chart-container">
-      <canvas id="trendChart"></canvas>
-    </div>
-  </div>
-
   <div class="section-title" id="tableTitle">数据明细</div>
   <div class="table-container">
     <div class="table-scroll">
@@ -128,6 +121,13 @@ tbody tr.total-row { font-weight:700; background:#e8eaf6; color:#1a237e; }
         <thead><tr><th>城市</th><th>指标</th></tr></thead>
         <tbody><tr><td colspan="2" style="text-align:center;color:#999;padding:30px;">点击查询按钮加载数据</td></tr></tbody>
       </table>
+    </div>
+  </div>
+
+  <div id="chartArea" style="display:none;">
+    <div class="section-title" id="chartTitle">趋势图</div>
+    <div class="chart-container">
+      <canvas id="trendChart"></canvas>
     </div>
   </div>
 </div>
