@@ -66,13 +66,44 @@ tbody tr.total-row { font-weight:700; background:#e8eaf6; color:#1a237e; }
   .filter-bar { flex-direction:column; align-items:stretch; }
   .summary-card { min-width:140px; }
 }
+
+/* 登录遮罩 */
+.login-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.5); z-index:9999; display:flex; align-items:center; justify-content:center; }
+.login-box { background:#fff; border-radius:12px; padding:32px; width:360px; box-shadow:0 8px 32px rgba(0,0,0,.2); }
+.login-box h2 { margin-bottom:20px; color:#1a237e; font-size:20px; }
+.login-field { margin-bottom:16px; }
+.login-field label { display:block; margin-bottom:6px; font-size:13px; color:#666; }
+.login-field select, .login-field input { width:100%; padding:8px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:14px; background:#fff; }
+.login-error { color:#c62828; font-size:12px; margin-bottom:10px; display:none; }
+.login-btn { width:100%; padding:10px; background:#1a237e; color:#fff; border:none; border-radius:6px; font-size:14px; cursor:pointer; }
+.login-btn:hover { background:#283593; }
+.logout-btn { float:right; padding:4px 14px; background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.3); border-radius:6px; font-size:12px; cursor:pointer; }
+.logout-btn:hover { background:rgba(255,255,255,.3); }
 </style>
 </head>
 <body>
 
+<!-- 登录遮罩 -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h2>乐博经营数据看板</h2>
+    <div class="login-field">
+      <label>选择城市</label>
+      <select id="loginCity"></select>
+    </div>
+    <div class="login-field">
+      <label>密码</label>
+      <input type="password" id="loginPassword" placeholder="请输入密码" onkeydown="if(event.key==='Enter')login()">
+    </div>
+    <div class="login-error" id="loginError">密码错误，请重试</div>
+    <button class="login-btn" onclick="login()">登 录</button>
+  </div>
+</div>
+
 <div class="header">
   <h1>乐博经营数据查询看板</h1>
   <div class="subtitle">城市级 · 2021-2026 · 21项指标 · 22个城市</div>
+  <button class="logout-btn" id="logoutBtn" style="display:none;" onclick="logout()">退出登录</button>
 </div>
 
 <!-- 筛选区 -->
@@ -143,6 +174,57 @@ let lastResults = null;
 let lastMonthList = null;
 let lastCity = null;
 
+// ===== 权限控制 =====
+const CITY_PASSWORDS = {
+  '总部': 'da7e1d', '上海': '8667d7', '北京': '3347fe', '南京': '2ae422',
+  '厦门': '8f509b', '合肥': '024b79', '大连': '19fc6d', '天津': '966c43',
+  '宁波': 'c1ec45', '广州': 'e5bb3c', '广西': '6812ec', '惠州': 'e14475',
+  '成都': 'f92819', '杭州': 'c3ee23', '武汉': 'cfbc77', '沈阳': '302b4b',
+  '济南': '50e987', '深圳': 'd41da0', '福州': 'b76582', '西安': 'd42898',
+  '郑州': '21837d', '重庆': 'fa6deb'
+};
+const ADMIN_PASSWORD = 'lebo2026';
+let loggedInCity = null;
+
+function login() {
+  const city = document.getElementById('loginCity').value;
+  const pwd = document.getElementById('loginPassword').value;
+  if (city === 'admin') {
+    if (pwd !== ADMIN_PASSWORD) { document.getElementById('loginError').style.display = ''; return; }
+    loggedInCity = 'all';
+  } else {
+    if (pwd !== CITY_PASSWORDS[city]) { document.getElementById('loginError').style.display = ''; return; }
+    loggedInCity = city;
+  }
+  sessionStorage.setItem('loggedInCity', loggedInCity);
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('logoutBtn').style.display = '';
+  setupCitySelector();
+  query();
+}
+
+function logout() {
+  sessionStorage.removeItem('loggedInCity');
+  loggedInCity = null;
+  document.getElementById('loginOverlay').style.display = '';
+  document.getElementById('logoutBtn').style.display = 'none';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginError').style.display = 'none';
+}
+
+function setupCitySelector() {
+  const citySel = document.getElementById('citySelect');
+  citySel.innerHTML = '';
+  if (loggedInCity === 'all') {
+    citySel.appendChild(new Option('全部城市', 'all'));
+    DATA.cities.forEach(c => citySel.appendChild(new Option(c, c)));
+    citySel.disabled = false;
+  } else {
+    citySel.appendChild(new Option(loggedInCity, loggedInCity));
+    citySel.disabled = true;
+  }
+}
+
 function selectIndicator(ind) {
   document.querySelectorAll('.summary-card').forEach(c => {
     c.classList.toggle('active', c.dataset.indicator === ind);
@@ -171,10 +253,10 @@ function initSelects() {
   startSel.value = '1月';
   endSel.value = '7月';
 
-  // 城市
-  const citySel = document.getElementById('citySelect');
-  citySel.appendChild(new Option('全部城市', 'all'));
-  DATA.cities.forEach(c => citySel.appendChild(new Option(c, c)));
+  // 登录页城市下拉
+  const loginCitySel = document.getElementById('loginCity');
+  loginCitySel.appendChild(new Option('管理员（全部城市）', 'admin'));
+  DATA.cities.forEach(c => loginCitySel.appendChild(new Option(c, c)));
 
   // 指标
   const indSel = document.getElementById('indicatorSelect');
@@ -546,7 +628,14 @@ function renderChart(results, monthList, city, indicator) {
 
 // ===== 初始化 =====
 initSelects();
-query();
+const savedCity = sessionStorage.getItem('loggedInCity');
+if (savedCity) {
+  loggedInCity = savedCity;
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('logoutBtn').style.display = '';
+  setupCitySelector();
+  query();
+}
 </script>
 
 </body>
