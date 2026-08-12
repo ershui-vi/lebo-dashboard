@@ -26,7 +26,9 @@ body { font-family:'Segoe UI','Microsoft YaHei',sans-serif; background:#f0f2f5; 
 
 /* 汇总卡片 */
 .summary-section { padding:18px 28px; display:flex; gap:14px; flex-wrap:wrap; }
-.summary-card { background:#fff; border-radius:10px; padding:16px 20px; min-width:160px; box-shadow:0 1px 4px rgba(0,0,0,.08); flex:1; }
+.summary-card { background:#fff; border-radius:10px; padding:16px 20px; min-width:160px; box-shadow:0 1px 4px rgba(0,0,0,.08); flex:1; cursor:pointer; transition:all .2s; border:2px solid transparent; }
+.summary-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.12); }
+.summary-card.active { border-color:#1a237e; background:#e8eaf6; }
 .summary-card .label { font-size:12px; color:#888; margin-bottom:6px; }
 .summary-card .value { font-size:24px; font-weight:700; color:#1a237e; }
 .summary-card .unit { font-size:13px; color:#999; font-weight:400; margin-left:3px; }
@@ -114,6 +116,13 @@ tbody tr.total-row { font-weight:700; background:#e8eaf6; color:#1a237e; }
 
 <!-- 主内容 -->
 <div class="main-content">
+  <div id="chartArea" style="display:none;">
+    <div class="section-title" id="chartTitle">趋势图</div>
+    <div class="chart-container">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+
   <div class="section-title" id="tableTitle">数据明细</div>
   <div class="table-container">
     <div class="table-scroll">
@@ -123,13 +132,6 @@ tbody tr.total-row { font-weight:700; background:#e8eaf6; color:#1a237e; }
       </table>
     </div>
   </div>
-
-  <div id="chartArea" style="display:none;">
-    <div class="section-title" id="chartTitle">趋势图</div>
-    <div class="chart-container">
-      <canvas id="trendChart"></canvas>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -137,6 +139,18 @@ const DATA = window.__CITY_DATA__;
 const MONTHS = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
 const MONEY_INDICATORS = ['预收','净预收','复购净预收','新招生预收','课耗','净利润','收入','人工成本','变动成本','固定成本','房租费用','教具成本','教具收入','测评预收','比赛预收','测评课耗','比赛课耗','现金流净额'];
 let trendChart = null;
+let lastResults = null;
+let lastMonthList = null;
+let lastCity = null;
+
+function selectIndicator(ind) {
+  document.querySelectorAll('.summary-card').forEach(c => {
+    c.classList.toggle('active', c.dataset.indicator === ind);
+  });
+  if (lastResults && lastMonthList && lastMonthList.length > 1) {
+    renderChart(lastResults, lastMonthList, lastCity, ind);
+  }
+}
 
 // ===== 初始化下拉框 =====
 function initSelects() {
@@ -232,13 +246,21 @@ function query() {
 
   document.getElementById('recordCount').textContent = `${results.length} 条`;
 
+  // 存储当前查询状态供卡片点击使用
+  lastResults = results;
+  lastMonthList = monthList;
+  lastCity = city;
+
   // 渲染
   renderSummary(results, indicator, monthList);
   renderTable(results, monthList, indicator, city, isSingleMonth);
 
-  // 趋势图：仅多月时显示
+  // 趋势图：仅多月时显示，默认选中第一个卡片
   if (!isSingleMonth) {
-    renderChart(results, monthList, city, indicator);
+    const firstCard = document.querySelector('.summary-card');
+    if (firstCard) {
+      selectIndicator(firstCard.dataset.indicator);
+    }
   } else {
     document.getElementById('chartArea').style.display = 'none';
     if (trendChart) { trendChart.destroy(); trendChart = null; }
@@ -273,6 +295,8 @@ function renderSummary(results, indicator, monthList) {
 
     const card = document.createElement('div');
     card.className = 'summary-card' + (ind === '净利润' ? ' highlight' : '');
+    card.dataset.indicator = ind;
+    card.onclick = () => selectIndicator(ind);
 
     let displayVal = '—';
     let unit = '';
@@ -437,13 +461,7 @@ function renderChart(results, monthList, city, indicator) {
   const chartArea = document.getElementById('chartArea');
   chartArea.style.display = '';
 
-  let title = '';
-  if (indicator !== 'all') {
-    title = `${indicator} - 月度趋势 (${monthList[0]}-${monthList[monthList.length-1]})`;
-  } else {
-    title = `期间趋势 (${monthList[0]}-${monthList[monthList.length-1]})`;
-  }
-  document.getElementById('chartTitle').textContent = title;
+  document.getElementById('chartTitle').textContent = `${indicator} - 月度趋势 (${monthList[0]}-${monthList[monthList.length-1]})`;
 
   const ctx = document.getElementById('trendChart').getContext('2d');
   if (trendChart) trendChart.destroy();
@@ -452,28 +470,32 @@ function renderChart(results, monthList, city, indicator) {
   let labels = monthList;
   const colors = ['#1a237e','#c62828','#2e7d32','#f57f17','#6a1b9a','#00838f','#e65100','#455a64','#ad1457','#283593','#bf360c','#00695c','#4e342e','#37474f','#827717','#004d40','#26418f','#b71c1c','#1b5e20','#e65100','#424242'];
 
-  if (indicator !== 'all') {
-    // 单指标: 每个城市一条线
-    if (city === 'all') {
-      const chartCities = [...new Set(results.map(r => r['城市']))];
-      chartCities.forEach((c, idx) => {
-        const cityResult = results.find(r => r['城市'] === c && r['指标'] === indicator);
-        if (cityResult) {
-          const data = monthList.map(m => {
-            const v = cityResult['月度'][m];
-            return (v !== null && v !== undefined && !isNaN(v)) ? parseFloat(v) : null;
-          });
-          datasets.push({
-            label: c, data: data,
-            borderColor: colors[idx % colors.length],
-            backgroundColor: colors[idx % colors.length] + '20',
-            borderWidth: 2, tension: 0.3, fill: false, spanGaps: true
-          });
-        }
-      });
-    } else {
+  const indResults = results.filter(r => r['指标'] === indicator);
+
+  if (city === 'all') {
+    // 每个城市一条线
+    const chartCities = [...new Set(indResults.map(r => r['城市']))];
+    chartCities.forEach((c, idx) => {
+      const cityResult = indResults.find(r => r['城市'] === c);
+      if (cityResult) {
+        const data = monthList.map(m => {
+          const v = cityResult['月度'][m];
+          return (v !== null && v !== undefined && !isNaN(v)) ? parseFloat(v) : null;
+        });
+        datasets.push({
+          label: c, data: data,
+          borderColor: colors[idx % colors.length],
+          backgroundColor: colors[idx % colors.length] + '20',
+          borderWidth: 2, tension: 0.3, fill: false, spanGaps: true
+        });
+      }
+    });
+  } else {
+    // 单城市
+    const cityResult = indResults.find(r => r['城市'] === city);
+    if (cityResult) {
       const data = monthList.map(m => {
-        const v = results[0] && results[0]['月度'][m];
+        const v = cityResult['月度'][m];
         return (v !== null && v !== undefined && !isNaN(v)) ? parseFloat(v) : null;
       });
       datasets.push({
@@ -482,26 +504,6 @@ function renderChart(results, monthList, city, indicator) {
         borderWidth: 2, tension: 0.3, fill: true, spanGaps: true
       });
     }
-  } else {
-    // 全指标: 各指标趋势
-    const allIndicators = [...new Set(results.map(r => r['指标']))];
-    allIndicators.forEach((ind, idx) => {
-      const indResults = results.filter(r => r['指标'] === ind);
-      const data = monthList.map(m => {
-        let sum = 0, hasData = false;
-        indResults.forEach(r => {
-          const v = r['月度'][m];
-          if (v !== null && v !== undefined && !isNaN(v)) { sum += parseFloat(v); hasData = true; }
-        });
-        return hasData ? sum : null;
-      });
-      datasets.push({
-        label: ind, data: data,
-        borderColor: colors[idx % colors.length],
-        backgroundColor: colors[idx % colors.length] + '30',
-        borderWidth: 2, tension: 0.3, fill: false, spanGaps: true
-      });
-    });
   }
 
   const showLegend = datasets.length <= 12;
